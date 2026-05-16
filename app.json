@@ -37,7 +37,10 @@
       "typedRoutes": true
     },
     "ios": {
-      "bundleIdentifier": "pl.zwrotka.app"
+      "bundleIdentifier": "pl.zwrotka.app",
+      "infoPlist": {
+        "ITSAppUsesNonExemptEncryption": false
+      }
     },
     "extra": {
       "router": {},
