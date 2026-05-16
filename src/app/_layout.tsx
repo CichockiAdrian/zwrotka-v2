@@ -6,8 +6,6 @@ import * as SplashScreen from 'expo-splash-screen';
 import { Colors } from '@/theme/tokens';
 import { useSettingsStore } from '@/store/settingsStore';
 import { useVoucherStore } from '@/store/voucherStore';
-import { seedIfEmpty } from '@/db/voucherRepository';
-import { SEED_VOUCHERS } from '@/data/seedVouchers';
 import * as Notifications from 'expo-notifications';
 
 Notifications.setNotificationHandler({
@@ -29,7 +27,7 @@ export default function RootLayout() {
     (async () => {
       try {
         await hydrateSettings();
-        await seedIfEmpty(SEED_VOUCHERS);
+        // Removed seedIfEmpty(SEED_VOUCHERS) to ensure a clean app for new users
         await hydrateVouchers();
         await runAutoExpiry();
       } finally {
