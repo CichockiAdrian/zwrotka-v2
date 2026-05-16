@@ -38,6 +38,13 @@
     },
     "ios": {
       "bundleIdentifier": "pl.zwrotka.app"
-    }
+    },
+    "extra": {
+      "router": {},
+      "eas": {
+        "projectId": "79a414d5-8d12-41fa-bb41-d5e1884309d9"
+      }
+    },
+    "owner": "adix0n"
   }
 }
