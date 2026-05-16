@@ -30,8 +30,7 @@
           "cameraPermission": "Zwrotka potrzebuje dostępu do aparatu, aby skanować kody voucherów."
         }
       ],
-      "expo-font",
-      "expo-barcode-scanner"
+      "expo-font"
     ],
     "scheme": "zwrotka",
     "experiments": {
