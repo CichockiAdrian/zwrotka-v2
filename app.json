@@ -18,7 +18,8 @@
       },
       "package": "pl.zwrotka.app",
       "permissions": [
-        "android.permission.CAMERA"
+        "android.permission.CAMERA",
+        "android.permission.RECORD_AUDIO"
       ]
     },
     "plugins": [
@@ -34,6 +35,9 @@
     "scheme": "zwrotka",
     "experiments": {
       "typedRoutes": true
+    },
+    "ios": {
+      "bundleIdentifier": "pl.zwrotka.app"
     }
   }
 }
