@@ -1,36 +1,19 @@
 // src/db/client.ts
-// Robust adapter for expo-sqlite that avoids Node.js startup crashes
-// while maintaining compatibility with Expo Go (SDK 51).
+// Modern SQLite adapter for Expo SDK 54+
+import * as SQLite from 'expo-sqlite';
 
-let SQLite: any;
+let dbInstance: SQLite.SQLiteDatabase | null = null;
 
-function getSQLite() {
-  if (!SQLite) {
-    // Detect if we are running in the native app (React Native) or in Node.js (CLI/Bundler)
-    if (typeof navigator !== 'undefined' && navigator.product === 'ReactNative') {
-      // In the app, use the legacy bridge of version 14 (compatible with Expo Go)
-      SQLite = require('expo-sqlite/legacy');
-    } else {
-      // In Node.js (CLI), return a mock to prevent resolution crashes
-      SQLite = {
-        openDatabase: () => ({
-          transaction: () => ({ executeSql: () => {} }),
-          readTransaction: () => ({ executeSql: () => {} }),
-        }),
-      };
-    }
-  }
-  return SQLite;
-}
+export async function getDb(): Promise<SQLite.SQLiteDatabase> {
+  if (dbInstance) return dbInstance;
 
-export async function getDb(): Promise<any> {
-  const sql = getSQLite();
-  const db = sql.openDatabase('zwrotka.db');
-  
-  // Initialize schema if needed
-  db.transaction((tx: any) => {
-    tx.executeSql('PRAGMA foreign_keys = ON;');
-    tx.executeSql(`
+  // In Node.js (CLI/Bundler), we return a mock or handle gracefully
+  if (typeof navigator !== 'undefined' && navigator.product === 'ReactNative') {
+    dbInstance = await SQLite.openDatabaseAsync('zwrotka.db');
+    
+    // Initialize schema
+    await dbInstance.execAsync(`
+      PRAGMA foreign_keys = ON;
       CREATE TABLE IF NOT EXISTS vouchers (
         id           TEXT    PRIMARY KEY NOT NULL,
         code         TEXT    NOT NULL,
@@ -47,44 +30,43 @@ export async function getDb(): Promise<any> {
         updated_at   TEXT    NOT NULL,
         notes        TEXT    NOT NULL DEFAULT ''
       );
+      CREATE INDEX IF NOT EXISTS idx_vouchers_status ON vouchers(status);
+      CREATE TABLE IF NOT EXISTS settings (key TEXT PRIMARY KEY NOT NULL, value TEXT NOT NULL);
     `);
-    tx.executeSql('CREATE INDEX IF NOT EXISTS idx_vouchers_status  ON vouchers(status);');
-    tx.executeSql('CREATE TABLE IF NOT EXISTS settings (key TEXT PRIMARY KEY NOT NULL, value TEXT NOT NULL);');
-  });
-  
-  return db;
+    
+    return dbInstance;
+  } else {
+    // Return a mock for non-native environments
+    return {
+      getAllAsync: async () => [],
+      getFirstAsync: async () => null,
+      runAsync: async () => ({ lastInsertRowId: 0, changes: 0 }),
+      execAsync: async () => {},
+      withTransactionAsync: async (cb: any) => await cb(),
+    } as any;
+  }
 }
 
 export async function queryAll<T = any>(sql: string, args: any[] = []): Promise<T[]> {
   const db = await getDb();
-  return new Promise((resolve, reject) => {
-    db.readTransaction((tx: any) => {
-      tx.executeSql(sql, args, (_: any, res: any) => resolve(res.rows._array), (_: any, err: any) => { reject(err); return false; });
-    }, (err: any) => reject(err));
-  });
+  return await db.getAllAsync(sql, args);
 }
 
 export async function queryFirst<T = any>(sql: string, args: any[] = []): Promise<T | null> {
-  const rows = await queryAll<T>(sql, args);
-  return rows[0] ?? null;
+  const db = await getDb();
+  return await db.getFirstAsync(sql, args);
 }
 
 export async function execute(sql: string, args: any[] = []): Promise<any> {
   const db = await getDb();
-  return new Promise((resolve, reject) => {
-    db.transaction((tx: any) => {
-      tx.executeSql(sql, args, (_: any, res: any) => resolve(res), (_: any, err: any) => { reject(err); return false; });
-    }, (err: any) => reject(err));
-  });
+  return await db.runAsync(sql, args);
 }
 
 export async function executeMany(statements: { sql: string; args?: any[] }[]): Promise<void> {
   const db = await getDb();
-  return new Promise((resolve, reject) => {
-    db.transaction((tx: any) => {
-      for (const { sql, args = [] } of statements) {
-        tx.executeSql(sql, args, undefined, (_: any, err: any) => { reject(err); return false; });
-      }
-    }, (err: any) => reject(err), () => resolve());
+  await db.withTransactionAsync(async () => {
+    for (const { sql, args = [] } of statements) {
+      await db.runAsync(sql, args);
+    }
   });
 }
