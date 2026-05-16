@@ -66,7 +66,8 @@ export default function AddVoucherScreen() {
   return (
     <KeyboardAvoidingView
       style={{ flex: 1, backgroundColor: Colors.bg.base }}
-      behavior={Platform.OS === 'ios' ? 'padding' : undefined}
+      behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
+      keyboardVerticalOffset={Platform.OS === 'ios' ? 88 : 0}
     >
       <ScrollView
         contentContainerStyle={styles.content}
@@ -90,6 +91,7 @@ export default function AddVoucherScreen() {
             placeholderTextColor={Colors.text.tertiary}
             autoCapitalize="none"
             autoCorrect={false}
+            autoFocus={!params.code}
           />
         </Field>
 
@@ -102,6 +104,7 @@ export default function AddVoucherScreen() {
               placeholder="0.00"
               placeholderTextColor={Colors.text.tertiary}
               keyboardType="decimal-pad"
+              autoFocus={!!params.code}
             />
             <View style={styles.currencyBadge}>
               <Text style={styles.currencyText}>zł</Text>

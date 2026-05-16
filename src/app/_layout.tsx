@@ -6,15 +6,6 @@ import * as SplashScreen from 'expo-splash-screen';
 import { Colors } from '@/theme/tokens';
 import { useSettingsStore } from '@/store/settingsStore';
 import { useVoucherStore } from '@/store/voucherStore';
-import * as Notifications from 'expo-notifications';
-
-Notifications.setNotificationHandler({
-  handleNotification: async () => ({
-    shouldShowAlert: true,
-    shouldPlaySound: true,
-    shouldSetBadge: false,
-  }),
-});
 
 SplashScreen.preventAutoHideAsync();
 
@@ -27,7 +18,6 @@ export default function RootLayout() {
     (async () => {
       try {
         await hydrateSettings();
-        // Removed seedIfEmpty(SEED_VOUCHERS) to ensure a clean app for new users
         await hydrateVouchers();
         await runAutoExpiry();
       } finally {
