@@ -45,19 +45,25 @@ function QRPlaceholder({ code, size }: { code: string; size: number }) {
   );
 }
 
-// Barcode placeholder
+// Barcode placeholder — musi mieścić się w kontenerze idealnie
 function BarcodePlaceholder({ code, width: w }: { code: string; width: number }) {
-  const barCount = 50;
+  const barCount = 44; // Stała liczba pasków dla deterministycznego wyglądu
+  const singleBarWidth = w / barCount;
+  
   return (
-    <View style={{ width: w, height: 100, flexDirection: 'row', alignItems: 'stretch', backgroundColor: '#fff' }}>
+    <View style={{ width: w, height: 100, flexDirection: 'row', alignItems: 'stretch', backgroundColor: '#fff', overflow: 'hidden' }}>
       {Array.from({ length: barCount }).map((_, i) => {
         const c = code.charCodeAt(i % code.length);
-        const barW = ((c + i) % 3) + 1;
-        const dark = (c + i) % 3 !== 0;
+        const dark = (c + i) % 2 === 0;
+        // Zróżnicowana grubość, ale suma musi pasować
         return (
           <View
             key={i}
-            style={{ width: barW * 3, height: '100%', backgroundColor: dark ? '#0D1117' : '#fff' }}
+            style={{
+              width: singleBarWidth,
+              height: '100%',
+              backgroundColor: dark ? '#1A1A2E' : '#fff'
+            }}
           />
         );
       })}
@@ -120,7 +126,7 @@ export default function FullscreenScreen() {
           {isQR ? (
             <QRPlaceholder code={voucher.code} size={QR_SIZE} />
           ) : (
-            <BarcodePlaceholder code={voucher.code} width={QR_SIZE} />
+            <BarcodePlaceholder code={voucher.code} width={width - 80} />
           )}
         </View>
 

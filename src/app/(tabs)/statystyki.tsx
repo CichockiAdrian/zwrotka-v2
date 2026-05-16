@@ -1,40 +1,13 @@
-// src/app/(tabs)/statystyki.tsx
-// Identyczny ze screenshotem: 4 kolorowe karty w gridzie, wykres słupkowy, sklepy
-
 import { ScrollView, StyleSheet, Text, View, Dimensions } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { format } from 'date-fns';
 import { pl } from 'date-fns/locale';
 import { useVoucherStore } from '@/store/voucherStore';
 import { Colors, Spacing, Typography, Radii } from '@/theme/tokens';
-import { formatValue, formatValueShort } from '@/utils/voucher';
+import { formatValueShort } from '@/utils/voucher';
 import { Ionicons } from '@expo/vector-icons';
 
 const { width } = Dimensions.get('window');
-const CHART_WIDTH = width - Spacing.base * 2;
-
-// Oblicz dane do wykresu (ostatnie 7 dni)
-function getWeeklyData(vouchers: ReturnType<typeof useVoucherStore.getState>['vouchers']) {
-  const days = ['Pn', 'Wt', 'Śr', 'Cz', 'Pt', 'So', 'Nd'];
-  const now = new Date();
-  return days.map((label, i) => {
-    const date = new Date(now);
-    date.setDate(now.getDate() - (6 - i));
-    const dayStart = new Date(date);
-    dayStart.setHours(0, 0, 0, 0);
-    const dayEnd = new Date(date);
-    dayEnd.setHours(23, 59, 59, 999);
-
-    const total = vouchers
-      .filter(v => {
-        const c = new Date(v.createdAt);
-        return c >= dayStart && c <= dayEnd;
-      })
-      .reduce((s, v) => s + v.valueGrosze, 0);
-
-    return { label, value: total };
-  });
-}
 
 // Sklepy pogrupowane
 function getTopStores(vouchers: ReturnType<typeof useVoucherStore.getState>['vouchers']) {
@@ -47,43 +20,12 @@ function getTopStores(vouchers: ReturnType<typeof useVoucherStore.getState>['vou
   return Array.from(map.entries())
     .map(([name, d]) => ({ name, ...d }))
     .sort((a, b) => b.total - a.total)
-    .slice(0, 5);
+    .slice(0, 10); // Pokazujemy więcej sklepów skoro nie ma wykresu
 }
-
-function BarChart({ data }: { data: { label: string; value: number }[] }) {
-  const maxVal = Math.max(...data.map(d => d.value), 1);
-  const barWidth = (CHART_WIDTH - Spacing.base * 2) / data.length - 8;
-  const chartHeight = 100;
-
-  return (
-    <View style={chartStyles.container}>
-      <View style={chartStyles.barsRow}>
-        {data.map((d, i) => (
-          <View key={i} style={chartStyles.barCol}>
-            <View style={[chartStyles.bar, {
-              height: Math.max((d.value / maxVal) * chartHeight, 4),
-              width: barWidth,
-            }]} />
-            <Text style={chartStyles.barLabel}>{d.label}</Text>
-          </View>
-        ))}
-      </View>
-    </View>
-  );
-}
-
-const chartStyles = StyleSheet.create({
-  container: { paddingTop: Spacing.sm },
-  barsRow: { flexDirection: 'row', alignItems: 'flex-end', height: 130 },
-  barCol: { flex: 1, alignItems: 'center', justifyContent: 'flex-end', gap: Spacing.xs },
-  bar: { backgroundColor: Colors.accent.primary, borderRadius: 4 },
-  barLabel: { fontSize: 10, color: Colors.text.tertiary, fontWeight: '500' },
-});
 
 export default function StatystykiScreen() {
   const stats = useVoucherStore(s => s.stats);
   const vouchers = useVoucherStore(s => s.vouchers);
-  const weekData = getWeeklyData(vouchers);
   const topStores = getTopStores(vouchers);
   const currentMonth = format(new Date(), 'LLLL yyyy', { locale: pl });
 
@@ -95,7 +37,7 @@ export default function StatystykiScreen() {
           <Text style={styles.subtitle}>{currentMonth}</Text>
         </View>
 
-        {/* 4 statystyki w gridzie — identyczne ze screenshotem */}
+        {/* 4 statystyki w gridzie */}
         <View style={styles.statsGrid}>
           {/* Odzyskane środki — zielona */}
           <View style={[styles.statCard, { backgroundColor: Colors.stats.green.bg, borderColor: Colors.stats.green.border }]}>
@@ -134,30 +76,28 @@ export default function StatystykiScreen() {
           </View>
         </View>
 
-        {/* Wykres tygodniowy */}
+        {/* Najczęstsze sklepy — teraz to jest główna sekcja */}
         <View style={styles.section}>
-          <Text style={styles.sectionTitle}>Miesięczny przegląd</Text>
-          <BarChart data={weekData} />
-        </View>
-
-        {/* Najczęstsze sklepy */}
-        {topStores.length > 0 && (
-          <View style={styles.section}>
-            <Text style={styles.sectionTitle}>Najczęstsze sklepy</Text>
-            {topStores.map(store => (
-              <View key={store.name} style={styles.storeRow}>
+          <Text style={styles.sectionTitle}>Ranking sklepów</Text>
+          {topStores.length > 0 ? (
+            topStores.map((store, i) => (
+              <View key={store.name} style={[styles.storeRow, i === 0 && { borderTopWidth: 0 }]}>
                 <View style={styles.storeIcon}>
                   <Ionicons name="storefront-outline" size={18} color={Colors.text.secondary} />
                 </View>
                 <View style={{ flex: 1 }}>
                   <Text style={styles.storeName}>{store.name}</Text>
-                  <Text style={styles.storeCount}>{store.count} voucherów</Text>
+                  <Text style={styles.storeCount}>{store.count} {store.count === 1 ? 'voucher' : 'vouchery'}</Text>
                 </View>
                 <Text style={styles.storeValue}>{formatValueShort(store.total)} zł</Text>
               </View>
-            ))}
-          </View>
-        )}
+            ))
+          ) : (
+            <Text style={{ color: Colors.text.tertiary, textAlign: 'center', paddingVertical: Spacing.lg }}>
+              Dodaj vouchery, aby zobaczyć statystyki sklepów.
+            </Text>
+          )}
+        </View>
       </ScrollView>
     </SafeAreaView>
   );

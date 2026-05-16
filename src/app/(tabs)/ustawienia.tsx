@@ -121,7 +121,11 @@ export default function UstawieniaScreen() {
                 'Tej operacji nie można cofnąć. Wszystkie vouchery zostaną usunięte.',
                 [
                   { text: 'Anuluj', style: 'cancel' },
-                  { text: 'Usuń wszystko', style: 'destructive', onPress: () => {} },
+                  { text: 'Usuń wszystko', style: 'destructive', onPress: async () => {
+                    const clearAll = useVoucherStore.getState().clearAllVouchers;
+                    await clearAll();
+                    Alert.alert('Sukces', 'Wszystkie dane zostały usunięte.');
+                  } },
                 ]
               );
             }}

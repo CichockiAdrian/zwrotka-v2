@@ -104,6 +104,10 @@ export async function deleteVoucher(id: string): Promise<void> {
   await execute('DELETE FROM vouchers WHERE id = ?', [id]);
 }
 
+export async function deleteAllVouchers(): Promise<void> {
+  await execute('DELETE FROM vouchers');
+}
+
 export async function expireOverdueVouchers(): Promise<number> {
   const now = nowISO();
   const result = await execute(
