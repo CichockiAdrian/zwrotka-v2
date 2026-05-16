@@ -1,5 +1,5 @@
 // src/db/voucherRepository.ts
-import { getDb } from './client';
+import { queryAll, queryFirst, execute, executeMany } from './client';
 import type { Voucher, CreateVoucherInput, UpdateVoucherInput, VoucherSortKey } from '@/types/voucher';
 import { generateId, nowISO } from '@/utils/date';
 
@@ -27,27 +27,24 @@ export async function getAllVouchers(
   sortKey: VoucherSortKey = 'createdAt',
   direction: 'asc' | 'desc' = 'desc'
 ): Promise<Voucher[]> {
-  const db = await getDb();
   const colMap: Record<VoucherSortKey, string> = {
     createdAt: 'created_at',
     valueGrosze: 'value_grosze',
     expiresAt: 'expires_at',
     storeName: 'store_name',
   };
-  const rows = await db.getAllAsync(
+  const rows = await queryAll(
     `SELECT * FROM vouchers ORDER BY ${colMap[sortKey]} ${direction.toUpperCase()}`
   );
   return rows.map(rowToVoucher);
 }
 
 export async function getVoucherById(id: string): Promise<Voucher | null> {
-  const db = await getDb();
-  const row = await db.getFirstAsync('SELECT * FROM vouchers WHERE id = ?', id);
+  const row = await queryFirst('SELECT * FROM vouchers WHERE id = ?', [id]);
   return row ? rowToVoucher(row) : null;
 }
 
 export async function createVoucher(input: CreateVoucherInput): Promise<Voucher> {
-  const db = await getDb();
   const now = nowISO();
   const id = generateId();
 
@@ -68,20 +65,19 @@ export async function createVoucher(input: CreateVoucherInput): Promise<Voucher>
     notes: input.notes ?? '',
   };
 
-  await db.runAsync(
+  await execute(
     `INSERT INTO vouchers
        (id,code,code_format,value_grosze,label,store_name,status,source,
         issued_at,expires_at,used_at,created_at,updated_at,notes)
      VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?)`,
-    v.id, v.code, v.codeFormat, v.valueGrosze, v.label, v.storeName,
-    v.status, v.source, v.issuedAt, v.expiresAt, v.usedAt,
-    v.createdAt, v.updatedAt, v.notes
+    [v.id, v.code, v.codeFormat, v.valueGrosze, v.label, v.storeName,
+     v.status, v.source, v.issuedAt, v.expiresAt, v.usedAt,
+     v.createdAt, v.updatedAt, v.notes]
   );
   return v;
 }
 
 export async function updateVoucher(id: string, input: UpdateVoucherInput): Promise<Voucher | null> {
-  const db = await getDb();
   const now = nowISO();
 
   const fieldMap: Record<string, string> = {
@@ -100,29 +96,26 @@ export async function updateVoucher(id: string, input: UpdateVoucherInput): Prom
   if (input.status === 'used') { sets.push('used_at = ?'); vals.push(now); }
 
   vals.push(id);
-  await db.runAsync(`UPDATE vouchers SET ${sets.join(', ')} WHERE id = ?`, ...vals);
+  await execute(`UPDATE vouchers SET ${sets.join(', ')} WHERE id = ?`, vals);
   return getVoucherById(id);
 }
 
 export async function deleteVoucher(id: string): Promise<void> {
-  const db = await getDb();
-  await db.runAsync('DELETE FROM vouchers WHERE id = ?', id);
+  await execute('DELETE FROM vouchers WHERE id = ?', [id]);
 }
 
 export async function expireOverdueVouchers(): Promise<number> {
-  const db = await getDb();
   const now = nowISO();
-  const r = await db.runAsync(
+  const result = await execute(
     `UPDATE vouchers SET status='expired', updated_at=?
      WHERE status='active' AND expires_at IS NOT NULL AND expires_at < ?`,
-    now, now
+    [now, now]
   );
-  return r.changes;
+  return result.rowsAffected;
 }
 
 export async function getVoucherCount(): Promise<number> {
-  const db = await getDb();
-  const row = await db.getFirstAsync<{ count: number }>('SELECT COUNT(*) as count FROM vouchers');
+  const row = await queryFirst<{ count: number }>('SELECT COUNT(*) as count FROM vouchers');
   return row?.count ?? 0;
 }
 
@@ -131,16 +124,17 @@ export async function seedIfEmpty(seeds: CreateVoucherInput[]): Promise<void> {
   if (count > 0) return;
   for (const s of seeds) await createVoucher(s);
   // Manually set statuses for used/expired seed vouchers
-  const db = await getDb();
-  const all = await db.getAllAsync<{ id: string; label: string }>('SELECT id, label FROM vouchers');
+  const all = await queryAll<{ id: string; label: string }>('SELECT id, label FROM vouchers');
+  const updates: { sql: string; args: (string | null)[] }[] = [];
   for (const row of all) {
     if (row.label.includes('[USED]')) {
-      await db.runAsync(`UPDATE vouchers SET status='used', used_at=updated_at WHERE id=?`, row.id);
-      await db.runAsync(`UPDATE vouchers SET label=REPLACE(label,'[USED]','') WHERE id=?`, row.id);
+      updates.push({ sql: `UPDATE vouchers SET status='used', used_at=updated_at WHERE id=?`, args: [row.id] });
+      updates.push({ sql: `UPDATE vouchers SET label=REPLACE(label,'[USED]','') WHERE id=?`, args: [row.id] });
     }
     if (row.label.includes('[EXPIRED]')) {
-      await db.runAsync(`UPDATE vouchers SET status='expired' WHERE id=?`, row.id);
-      await db.runAsync(`UPDATE vouchers SET label=REPLACE(label,'[EXPIRED]','') WHERE id=?`, row.id);
+      updates.push({ sql: `UPDATE vouchers SET status='expired' WHERE id=?`, args: [row.id] });
+      updates.push({ sql: `UPDATE vouchers SET label=REPLACE(label,'[EXPIRED]','') WHERE id=?`, args: [row.id] });
     }
   }
+  if (updates.length > 0) await executeMany(updates);
 }

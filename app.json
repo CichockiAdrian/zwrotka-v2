@@ -17,17 +17,19 @@
         "backgroundColor": "#0D1117"
       },
       "package": "pl.zwrotka.app",
-      "permissions": ["android.permission.CAMERA"]
+      "permissions": [
+        "android.permission.CAMERA"
+      ]
     },
     "plugins": [
       "expo-router",
-      "expo-sqlite",
       [
         "expo-camera",
         {
           "cameraPermission": "Zwrotka potrzebuje dostępu do aparatu, aby skanować kody voucherów."
         }
-      ]
+      ],
+      "expo-font"
     ],
     "scheme": "zwrotka",
     "experiments": {

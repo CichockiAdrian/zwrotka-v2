@@ -114,28 +114,31 @@ export default function HistoriaScreen() {
       </View>
 
       {/* Filter chips */}
-      <ScrollView
-        horizontal
-        showsHorizontalScrollIndicator={false}
-        contentContainerStyle={styles.filtersRow}
-      >
-        <Ionicons name="filter" size={18} color={Colors.text.secondary} style={{ marginRight: 4 }} />
-        {FILTERS.map(f => (
-          <Pressable
-            key={f.value}
-            style={[styles.chip, f.value === filters.status && styles.chipActive]}
-            onPress={() => setFilters({ status: f.value })}
-          >
-            <Text style={[styles.chipText, f.value === filters.status && styles.chipTextActive]}>
-              {f.label}
-            </Text>
-          </Pressable>
-        ))}
-      </ScrollView>
+      <View style={{ flexGrow: 0 }}>
+        <ScrollView
+          horizontal
+          showsHorizontalScrollIndicator={false}
+          contentContainerStyle={styles.filtersRow}
+        >
+          <Ionicons name="filter" size={18} color={Colors.text.secondary} style={{ marginRight: 4 }} />
+          {FILTERS.map(f => (
+            <Pressable
+              key={f.value}
+              style={[styles.chip, f.value === filters.status && styles.chipActive]}
+              onPress={() => setFilters({ status: f.value })}
+            >
+              <Text style={[styles.chipText, f.value === filters.status && styles.chipTextActive]}>
+                {f.label}
+              </Text>
+            </Pressable>
+          ))}
+        </ScrollView>
+      </View>
 
       {/* List */}
       <FlatList
         data={vouchers}
+        style={{ flex: 1 }}
         keyExtractor={v => v.id}
         renderItem={({ item }) => (
           <VoucherListItem
@@ -148,7 +151,7 @@ export default function HistoriaScreen() {
             codeFormat={item.codeFormat}
           />
         )}
-        contentContainerStyle={[styles.list, vouchers.length === 0 && { flex: 1 }]}
+        contentContainerStyle={styles.list}
         showsVerticalScrollIndicator={false}
         ListEmptyComponent={
           <View style={styles.empty}>
@@ -170,23 +173,32 @@ const styles = StyleSheet.create({
 
   filtersRow: {
     paddingHorizontal: Spacing.base,
+    paddingTop: Spacing.xs,
     paddingBottom: Spacing.md,
     alignItems: 'center',
     gap: Spacing.sm,
   },
   chip: {
     paddingHorizontal: Spacing.base,
-    paddingVertical: Spacing.xs + 2,
+    paddingVertical: Spacing.sm,
     borderRadius: Radii.full,
     backgroundColor: Colors.bg.elevated,
     borderWidth: 1,
     borderColor: Colors.border.default,
+    minHeight: 36,
+    justifyContent: 'center',
+    alignItems: 'center',
   },
   chipActive: {
     backgroundColor: Colors.accent.primary,
     borderColor: Colors.accent.primary,
   },
-  chipText: { fontSize: Typography.size.sm, color: Colors.text.secondary, fontWeight: Typography.weight.medium },
+  chipText: { 
+    fontSize: Typography.size.sm, 
+    color: Colors.text.secondary, 
+    fontWeight: Typography.weight.medium,
+    lineHeight: 18,
+  },
   chipTextActive: { color: '#fff', fontWeight: Typography.weight.bold },
 
   list: { paddingHorizontal: Spacing.base, paddingBottom: Spacing['4xl'] },
