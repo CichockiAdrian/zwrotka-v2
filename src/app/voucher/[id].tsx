@@ -9,6 +9,8 @@ import { Colors, Spacing, Typography, Radii } from '@/theme/tokens';
 import { formatValue, formatValueShort } from '@/utils/voucher';
 import { formatDate, formatRelative, daysUntilExpiry } from '@/utils/date';
 import { Ionicons } from '@expo/vector-icons';
+import Barcode from 'react-native-barcode-svg';
+import QRCode from 'react-native-qrcode-svg';
 
 export default function VoucherDetailScreen() {
   const { id } = useLocalSearchParams<{ id: string }>();
@@ -16,10 +18,24 @@ export default function VoucherDetailScreen() {
   const markUsed = useVoucherStore(s => s.markUsed);
   const removeVoucher = useVoucherStore(s => s.removeVoucher);
   const [copied, setCopied] = useState(false);
+  const [cardWidth, setCardWidth] = useState<number>(0);
 
   if (!voucher) {
     return <View style={styles.center}><Text style={styles.notFound}>Nie znaleziono vouchera.</Text></View>;
   }
+
+  function getBarcodeFormat(): string {
+    const code = voucher!.code.replace(/\s/g, '');
+    const onlyDigits = /^\d+$/.test(code);
+    if (onlyDigits && code.length === 12) return 'EAN13';
+    if (onlyDigits && code.length === 7) return 'EAN8';
+    return 'CODE128';
+  }
+
+  const isQR = voucher.codeFormat === 'qr';
+  const barcodeFormat = getBarcodeFormat();
+  const qrSize = cardWidth ? Math.min(cardWidth - 48, 140) : 120;
+  const barcodeWidth = cardWidth ? cardWidth - 48 : 240;
 
   const days = daysUntilExpiry(voucher.expiresAt);
   const isActive = voucher.status === 'active';
@@ -86,19 +102,29 @@ export default function VoucherDetailScreen() {
           <Pressable
             style={styles.codeCard}
             onPress={() => router.push(`/voucher/${voucher.id}/fullscreen`)}
+            onLayout={(e) => {
+              const { width: w } = e.nativeEvent.layout;
+              if (w > 0) setCardWidth(w);
+            }}
           >
             <View style={styles.codeVisual}>
-              {voucher.codeFormat === 'qr' ? (
-                <Ionicons name="qr-code" size={80} color={Colors.text.primary} />
+              {isQR ? (
+                <QRCode
+                  value={voucher.code}
+                  size={qrSize}
+                  color="#000000"
+                  backgroundColor="#FFFFFF"
+                />
               ) : (
-                <View style={styles.barcodeVisual}>
-                  {Array.from({ length: 40 }).map((_, i) => (
-                    <View key={i} style={[styles.bar, {
-                      flex: (voucher.code.charCodeAt(i % voucher.code.length) % 3) + 1,
-                      opacity: (voucher.code.charCodeAt(i % voucher.code.length) % 2 === 0) ? 1 : 0,
-                    }]} />
-                  ))}
-                </View>
+                <Barcode
+                  value={voucher.code}
+                  format={barcodeFormat}
+                  singleBarWidth={2}
+                  maxWidth={barcodeWidth}
+                  height={72}
+                  lineColor="#000000"
+                  backgroundColor="#FFFFFF"
+                />
               )}
             </View>
             <Text style={styles.codeText}>{voucher.code}</Text>
@@ -120,7 +146,6 @@ export default function VoucherDetailScreen() {
           <View style={styles.detailCard}>
             {[
               { label: 'Sklep', value: voucher.storeName || '—' },
-              { label: 'Format', value: voucher.codeFormat.toUpperCase() },
               { label: 'Wystawiony', value: formatDate(voucher.issuedAt) },
               voucher.expiresAt ? { label: 'Ważny do', value: formatDate(voucher.expiresAt) } : null,
               voucher.usedAt ? { label: 'Użyty', value: formatRelative(voucher.usedAt) } : null,

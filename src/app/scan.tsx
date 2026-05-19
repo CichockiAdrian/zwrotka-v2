@@ -1,25 +1,51 @@
 import { useEffect, useState } from 'react';
-import { StyleSheet, Text, View, Pressable, StatusBar } from 'react-native';
+import { StyleSheet, Text, View, Pressable, StatusBar, Alert } from 'react-native';
 import { router } from 'expo-router';
 import { CameraView } from 'expo-camera';
 import * as Haptics from 'expo-haptics';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { useScanner } from '@/hooks/useScanner';
+import { useVoucherStore } from '@/store/voucherStore';
 import { useSettingsStore } from '@/store/settingsStore';
 import { Colors, Spacing, Typography, Radii } from '@/theme/tokens';
 import { Ionicons } from '@expo/vector-icons';
 
 export default function ScanScreen() {
-  const { state, result, hasPermission, requestPermission, handleScan } = useScanner();
+  const { state, result, hasPermission, requestPermission, handleScan, reset } = useScanner();
   const hapticEnabled = useSettingsStore(s => s.settings.hapticEnabled);
+  const vouchers = useVoucherStore(s => s.vouchers);
   const [torch, setTorch] = useState(false);
 
   useEffect(() => {
     if (state === 'success' && result) {
       if (hapticEnabled) Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
-      router.replace({ pathname: '/voucher/add', params: { code: result.code, format: result.format } });
+      
+      const existing = vouchers.find(v => v.code.trim() === result.code.trim());
+      if (existing) {
+        Alert.alert(
+          'Voucher już istnieje',
+          `Voucher o tym kodzie (${result.code}) jest już w Twojej bazie (sklep: ${existing.storeName || 'Nieznany'}).\nCo chcesz zrobić?`,
+          [
+            {
+              text: 'Zobacz voucher',
+              onPress: () => router.replace(`/voucher/${existing.id}`),
+            },
+            {
+              text: 'Skanuj inny',
+              onPress: () => reset(),
+              style: 'cancel',
+            },
+            {
+              text: 'Dodaj mimo to',
+              onPress: () => router.replace({ pathname: '/voucher/add', params: { code: result.code, format: result.format } }),
+            }
+          ]
+        );
+      } else {
+        router.replace({ pathname: '/voucher/add', params: { code: result.code, format: result.format } });
+      }
     }
-  }, [state, result]);
+  }, [state, result, vouchers]);
 
   useEffect(() => {
     if (hasPermission === null) requestPermission();

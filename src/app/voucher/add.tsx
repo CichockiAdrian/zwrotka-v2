@@ -10,21 +10,24 @@ import { useVoucherStore } from '@/store/voucherStore';
 import { useSettingsStore } from '@/store/settingsStore';
 import { Colors, Spacing, Typography, Radii } from '@/theme/tokens';
 import { parsePLNToGrosze, generateDefaultLabel } from '@/utils/voucher';
+import { formatDate } from '@/utils/date';
 import { Ionicons } from '@expo/vector-icons';
 import type { CodeFormat } from '@/types/voucher';
+import DateTimePicker from '@react-native-community/datetimepicker';
 
 type AddParams = { code?: string; format?: CodeFormat };
 
 export default function AddVoucherScreen() {
   const params = useLocalSearchParams<AddParams>();
   const addVoucher = useVoucherStore(s => s.addVoucher);
+  const vouchers = useVoucherStore(s => s.vouchers);
   const hapticEnabled = useSettingsStore(s => s.settings.hapticEnabled);
 
   const [code, setCode] = useState(params.code ?? '');
   const [valueInput, setValueInput] = useState('');
   const [storeName, setStoreName] = useState('');
-  const [label, setLabel] = useState('');
-  const [expiresAt, setExpiresAt] = useState('');
+  const [expiryDate, setExpiryDate] = useState<Date | null>(null);
+  const [showDatePicker, setShowDatePicker] = useState(false);
   const [notes, setNotes] = useState('');
   const [errors, setErrors] = useState<Record<string, string>>({});
   const [isSubmitting, setIsSubmitting] = useState(false);
@@ -40,26 +43,43 @@ export default function AddVoucherScreen() {
 
   async function handleSubmit() {
     if (!validate()) return;
-    setIsSubmitting(true);
-    try {
-      const grosze = parsePLNToGrosze(valueInput)!;
-      const effectiveLabel = label.trim() || generateDefaultLabel(storeName);
-      const voucher = await addVoucher({
-        code: code.trim(),
-        codeFormat: params.format ?? 'unknown',
-        valueGrosze: grosze,
-        label: effectiveLabel,
-        storeName: storeName.trim(),
-        expiresAt: expiresAt.trim() ? new Date(expiresAt.trim()).toISOString() : null,
-        notes: notes.trim(),
-        source: params.code ? 'scan' : 'manual',
-      });
-      if (hapticEnabled) await Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
-      router.replace(`/voucher/${voucher.id}`);
-    } catch {
-      Alert.alert('Błąd', 'Nie udało się zapisać vouchera.');
-    } finally {
-      setIsSubmitting(false);
+
+    const saveVoucher = async () => {
+      setIsSubmitting(true);
+      try {
+        const grosze = parsePLNToGrosze(valueInput)!;
+        const effectiveLabel = generateDefaultLabel(storeName);
+        const voucher = await addVoucher({
+          code: code.trim(),
+          codeFormat: params.format ?? 'unknown',
+          valueGrosze: grosze,
+          label: effectiveLabel,
+          storeName: storeName.trim(),
+          expiresAt: expiryDate ? expiryDate.toISOString() : null,
+          notes: notes.trim(),
+          source: params.code ? 'scan' : 'manual',
+        });
+        if (hapticEnabled) await Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
+        router.replace(`/voucher/${voucher.id}`);
+      } catch {
+        Alert.alert('Błąd', 'Nie udało się zapisać vouchera.');
+      } finally {
+        setIsSubmitting(false);
+      }
+    };
+
+    const existing = vouchers.find(v => v.code.trim() === code.trim());
+    if (existing) {
+      Alert.alert(
+        'Voucher już istnieje',
+        `Voucher o kodzie "${code.trim()}" jest już w Twojej bazie (sklep: "${existing.storeName || 'Nieznany'}").\nCzy na pewno chcesz dodać kolejny o tym samym kodzie?`,
+        [
+          { text: 'Anuluj', style: 'cancel' },
+          { text: 'Dodaj mimo to', onPress: saveVoucher }
+        ]
+      );
+    } else {
+      await saveVoucher();
     }
   }
 
@@ -123,25 +143,46 @@ export default function AddVoucherScreen() {
           />
         </Field>
 
-        <Field label="Nazwa (opcjonalnie)">
-          <TextInput
-            style={styles.input}
-            value={label}
-            onChangeText={setLabel}
-            placeholder={generateDefaultLabel(storeName)}
-            placeholderTextColor={Colors.text.tertiary}
-          />
-        </Field>
-
         <Field label="Data ważności (opcjonalnie)">
-          <TextInput
-            style={styles.input}
-            value={expiresAt}
-            onChangeText={setExpiresAt}
-            placeholder="YYYY-MM-DD"
-            placeholderTextColor={Colors.text.tertiary}
-            keyboardType="numbers-and-punctuation"
-          />
+          <Pressable style={styles.inputRow} onPress={() => setShowDatePicker(!showDatePicker)}>
+            <Text style={[styles.inputText, !expiryDate && { color: Colors.text.tertiary }]}>
+              {expiryDate ? formatDate(expiryDate.toISOString()) : 'Wybierz datę...'}
+            </Text>
+            {expiryDate && (
+              <Pressable onPress={() => setExpiryDate(null)} hitSlop={8} style={{ marginRight: Spacing.sm }}>
+                <Ionicons name="close-circle" size={18} color={Colors.text.secondary} />
+              </Pressable>
+            )}
+            <Ionicons name="calendar-outline" size={20} color={Colors.text.secondary} />
+          </Pressable>
+
+          {showDatePicker && Platform.OS === 'ios' && (
+            <View style={styles.inlineDatePickerContainer}>
+              <DateTimePicker
+                value={expiryDate || new Date()}
+                mode="date"
+                display="inline"
+                minimumDate={new Date()}
+                themeVariant="dark"
+                onChange={(event, date) => {
+                  if (date) setExpiryDate(date);
+                }}
+              />
+            </View>
+          )}
+
+          {showDatePicker && Platform.OS === 'android' && (
+            <DateTimePicker
+              value={expiryDate || new Date()}
+              mode="date"
+              display="default"
+              minimumDate={new Date()}
+              onChange={(event, date) => {
+                setShowDatePicker(false);
+                if (date) setExpiryDate(date);
+              }}
+            />
+          )}
         </Field>
 
         <Field label="Notatki (opcjonalnie)">
@@ -260,5 +301,29 @@ const styles = StyleSheet.create({
     fontSize: Typography.size.base,
     fontWeight: Typography.weight.semibold,
     color: '#fff',
+  },
+  inputRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    backgroundColor: Colors.bg.surface,
+    borderRadius: Radii.md,
+    borderWidth: 1,
+    borderColor: Colors.border.default,
+    paddingHorizontal: Spacing.base,
+    paddingVertical: Spacing.md,
+  },
+  inputText: {
+    fontSize: Typography.size.base,
+    color: Colors.text.primary,
+    flex: 1,
+  },
+  inlineDatePickerContainer: {
+    backgroundColor: Colors.bg.surface,
+    borderRadius: Radii.md,
+    borderWidth: 1,
+    borderColor: Colors.border.default,
+    padding: Spacing.sm,
+    marginTop: Spacing.xs,
   },
 });

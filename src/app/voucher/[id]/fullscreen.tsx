@@ -1,78 +1,31 @@
 // src/app/voucher/[id]/fullscreen.tsx
 // Identyczny ze screenshotem: białe tło, store name, wielka zielona kwota,
-// QR code w białej karcie, kod pod spodem, "Pokaż ten kod kasjerowi"
+// barcode/QR w białej karcie, kod pod spodem, "Pokaż ten kod kasjerowi"
 
-import { useEffect } from 'react';
+import { useEffect, useState } from 'react';
 import { StyleSheet, Text, View, Pressable, StatusBar, Dimensions } from 'react-native';
 import { router, useLocalSearchParams } from 'expo-router';
 import * as Brightness from 'expo-brightness';
 import { useKeepAwake } from 'expo-keep-awake';
+import Barcode from 'react-native-barcode-svg';
+import QRCode from 'react-native-qrcode-svg';
 import { useVoucherStore } from '@/store/voucherStore';
 import { useSettingsStore } from '@/store/settingsStore';
 import { Colors, Spacing, Typography, Radii } from '@/theme/tokens';
 import { formatValueShort } from '@/utils/voucher';
 import { Ionicons } from '@expo/vector-icons';
 
-const { width } = Dimensions.get('window');
-const QR_SIZE = width * 0.6;
 
-// Prosty QR-like placeholder z deterministycznym wzorem
-function QRPlaceholder({ code, size }: { code: string; size: number }) {
-  const cells = 14;
-  const cellSize = size / cells;
-
-  return (
-    <View style={{ width: size, height: size, flexDirection: 'row', flexWrap: 'wrap', backgroundColor: '#fff' }}>
-      {Array.from({ length: cells * cells }).map((_, i) => {
-        const x = i % cells;
-        const y = Math.floor(i / cells);
-        const charCode = code.charCodeAt((x * 3 + y * 7) % code.length);
-        const isCornerBlock =
-          (x < 4 && y < 4) || (x >= cells - 4 && y < 4) || (x < 4 && y >= cells - 4);
-        const dark = isCornerBlock ? (x === 0 || x === 3 || y === 0 || y === 3) : ((charCode + x + y) % 2 === 0);
-        return (
-          <View
-            key={i}
-            style={{
-              width: cellSize,
-              height: cellSize,
-              backgroundColor: dark ? '#0D1117' : '#fff',
-            }}
-          />
-        );
-      })}
-    </View>
-  );
-}
-
-// Barcode placeholder — musi mieścić się w kontenerze idealnie
-function BarcodePlaceholder({ code, width: w }: { code: string; width: number }) {
-  const barCount = 44; // Stała liczba pasków dla deterministycznego wyglądu
-  const singleBarWidth = w / barCount;
-  
-  return (
-    <View style={{ width: w, height: 100, flexDirection: 'row', alignItems: 'stretch', backgroundColor: '#fff', overflow: 'hidden' }}>
-      {Array.from({ length: barCount }).map((_, i) => {
-        const c = code.charCodeAt(i % code.length);
-        const dark = (c + i) % 2 === 0;
-        // Zróżnicowana grubość, ale suma musi pasować
-        return (
-          <View
-            key={i}
-            style={{
-              width: singleBarWidth,
-              height: '100%',
-              backgroundColor: dark ? '#1A1A2E' : '#fff'
-            }}
-          />
-        );
-      })}
-    </View>
-  );
-}
 
 export default function FullscreenScreen() {
   const { id } = useLocalSearchParams<{ id: string }>();
+  const [containerWidth, setContainerWidth] = useState<number>(() => {
+    const w = Dimensions.get('window').width;
+    return w > 0 ? w : 375;
+  });
+
+  const qrSize = containerWidth * 0.6;
+  const barcodeWidth = containerWidth - 80;
   const voucher = useVoucherStore(s => s.vouchers.find(v => v.id === id));
   const keepAwake = useSettingsStore(s => s.settings.keepScreenAwakeOnScan);
   const autoBrightness = useSettingsStore(s => s.settings.autoBrightness);
@@ -102,10 +55,31 @@ export default function FullscreenScreen() {
     );
   }
 
-  const isQR = voucher.codeFormat === 'qr' || voucher.codeFormat === 'unknown';
+  // Biedronka i większość polskich sieci używa CODE128
+  // EAN-13 ma dokładnie 12 cyfr (13. to cyfra kontrolna generowana automatycznie)
+  // EAN-8 ma dokładnie 7 cyfr
+  // Dla wszystkich innych (w tym długich kodów Biedronki) → CODE128
+  function getBarcodeFormat(): string {
+    const code = voucher!.code.replace(/\s/g, '');
+    const onlyDigits = /^\d+$/.test(code);
+    if (onlyDigits && code.length === 12) return 'EAN13';
+    if (onlyDigits && code.length === 7) return 'EAN8';
+    return 'CODE128';
+  }
+
+  const isQR = voucher.codeFormat === 'qr';
+  const barcodeFormat = getBarcodeFormat();
 
   return (
-    <View style={styles.container}>
+    <View
+      style={styles.container}
+      onLayout={(e) => {
+        const { width: w } = e.nativeEvent.layout;
+        if (w > 0) {
+          setContainerWidth(w);
+        }
+      }}
+    >
       <StatusBar barStyle="dark-content" backgroundColor="#fff" />
 
       {/* Back button */}
@@ -114,24 +88,37 @@ export default function FullscreenScreen() {
       </Pressable>
 
       <View style={styles.content}>
-        {/* Store + value — identyczne ze screenshotem */}
+        {/* Store + value */}
         <Text style={styles.storeName}>{voucher.storeName || 'Voucher'}</Text>
         <Text style={styles.value}>
           {formatValueShort(voucher.valueGrosze)}{' '}
           <Text style={styles.valueUnit}>zł</Text>
         </Text>
 
-        {/* Code card — biała karta z cieniem jak na screenshocie */}
+        {/* Code card */}
         <View style={styles.codeCard}>
           {isQR ? (
-            <QRPlaceholder code={voucher.code} size={QR_SIZE} />
+            <QRCode
+              value={voucher.code}
+              size={qrSize}
+              color="#000000"
+              backgroundColor="#FFFFFF"
+            />
           ) : (
-            <BarcodePlaceholder code={voucher.code} width={width - 80} />
+            <Barcode
+              value={voucher.code}
+              format={barcodeFormat}
+              singleBarWidth={2}
+              maxWidth={barcodeWidth}
+              height={100}
+              lineColor="#000000"
+              backgroundColor="#FFFFFF"
+            />
           )}
         </View>
 
         {/* Raw code */}
-        <Text style={styles.rawCode} selectable>{voucher.code.toUpperCase()}</Text>
+        <Text style={styles.rawCode} selectable>{voucher.code}</Text>
 
         {/* Instruction */}
         <Text style={styles.instruction}>Pokaż ten kod kasjerowi</Text>

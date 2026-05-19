@@ -30,7 +30,8 @@
           "cameraPermission": "Zwrotka potrzebuje dostępu do aparatu, aby skanować kody voucherów."
         }
       ],
-      "expo-font"
+      "expo-font",
+      "@react-native-community/datetimepicker"
     ],
     "scheme": "zwrotka",
     "experiments": {
